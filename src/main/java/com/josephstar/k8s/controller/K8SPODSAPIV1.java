@@ -1,6 +1,7 @@
 package com.josephstar.k8s.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.josephstar.k8s.domain.K8S;
 import com.josephstar.k8s.domain.K8SPod;
 import com.josephstar.k8s.domain.K8SResponse;
@@ -75,7 +76,7 @@ public class K8SPODSAPIV1 {
 
             ObjectMapper mapper = new ObjectMapper();
             K8SPod k8SPod = mapper.convertValue(k8SRequest.getRequest().getData(), K8SPod.class);
-            logger.info("Start Pods request with execId= " + k8SPod.getExecId() + " and numberOfAgents= " + k8SPod.getNumberOfAgents());
+            logger.info("START_PODS_API_K8S_REQUEST_PARAMS = " + k8SPod.toString());
 
             commands.add(k8SPod.getScriptName());
             commands.add(k8SPod.getRepoName());
@@ -108,13 +109,18 @@ public class K8SPODSAPIV1 {
                     .endSpec()
                     .build();
 
-            Deployment result = client.apps().deployments().inNamespace("default").createOrReplace(deployment);
+            // Create an ObjectMapper mapper for YAML
+            ObjectMapper mapperYAML = new ObjectMapper(new YAMLFactory());
+            String deploymentYAML = mapperYAML.writeValueAsString(deployment);
+            logger.info("START_PODS_API_K8S_DEPLOYMENT_TEMPLATE = \n" + deploymentYAML);
+
+            client.apps().deployments().inNamespace("default").createOrReplace(deployment);
 
             k8SResponse.setData(k8SPod);
 
-        } catch (KubernetesClientException e) {
+        } catch (Exception ex) {
             k8S.setSuccess(false);
-            logger.error(e.getMessage(), e);
+            logger.error(ex.getMessage(), ex);
         }
 
         k8S.setResponse(k8SResponse);
