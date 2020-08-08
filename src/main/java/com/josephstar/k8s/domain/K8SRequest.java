@@ -7,4 +7,6 @@ import lombok.Setter;
 @Setter
 public class K8SRequest {
 
+    private Object data;
+
 }
