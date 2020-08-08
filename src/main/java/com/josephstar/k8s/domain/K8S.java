@@ -1,12 +1,13 @@
 package com.josephstar.k8s.domain;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 import java.sql.Timestamp;
 
 @Getter
 @Setter
+@ToString
+@EqualsAndHashCode
 public class K8S {
 
     private Boolean success = true;
