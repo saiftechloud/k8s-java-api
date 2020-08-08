@@ -1,10 +1,11 @@
 package com.josephstar.k8s.domain;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
 @Getter
 @Setter
+@ToString
+@EqualsAndHashCode
 public class K8SRequest {
 
     private Object data;

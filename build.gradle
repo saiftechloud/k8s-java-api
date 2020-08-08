@@ -18,7 +18,6 @@ repositories {
     mavenCentral()
 }
 
-def k8s = '9.0.0'
 def swagger2 = '2.9.2'
 def fabric8 = '4.10.3'
 
@@ -33,7 +32,6 @@ dependencies {
     testImplementation('org.springframework.boot:spring-boot-starter-test') {
         exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
     }
-    compile "io.kubernetes:client-java:${k8s}"
     compile "io.springfox:springfox-swagger2:${swagger2}"
     compile "io.springfox:springfox-swagger-ui:${swagger2}"
     compile "io.fabric8:kubernetes-client:${fabric8}"
