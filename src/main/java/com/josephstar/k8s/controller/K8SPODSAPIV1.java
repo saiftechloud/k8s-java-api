@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.josephstar.k8s.domain.K8S;
 import com.josephstar.k8s.domain.K8SPod;
 import com.josephstar.k8s.domain.K8SResponse;
-import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
@@ -15,6 +14,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Api(tags="k8s-pods-api-v1", description = "Kubernetes Pods API v1")
 @RestController
@@ -60,12 +62,13 @@ public class K8SPODSAPIV1 {
      *      repoName - docker repository name
      *      gitRepoUrl - git repository name
      *      execId - request execution id
-     *      numberOfAgents - the number of replicas
      * @return
+     *      numberOfAgents - the number of replicas
      */
     @PostMapping(path ="/start")
     public ResponseEntity<?> startPod(@RequestBody K8S k8SRequest) {
         K8SResponse k8SResponse = new K8SResponse();
+        List<String> commands = new ArrayList<>();
 
         Config config = new ConfigBuilder().withMasterUrl(master).build();
         try (final KubernetesClient client = new DefaultKubernetesClient(config)) {
@@ -74,6 +77,12 @@ public class K8SPODSAPIV1 {
             K8SPod k8SPod = mapper.convertValue(k8SRequest.getRequest().getData(), K8SPod.class);
             logger.info("Start Pods request with execId= " + k8SPod.getExecId() + " and numberOfAgents= " + k8SPod.getNumberOfAgents());
 
+            commands.add(k8SPod.getScriptName());
+            commands.add(k8SPod.getRepoName());
+            commands.add( k8SPod.getGitRepoUrl());
+            commands.add(k8SPod.getExecId());
+
+            // make deployment
             Deployment deployment = new DeploymentBuilder()
                     .withNewMetadata()
                     .withName(k8SPod.getScriptName())
@@ -92,14 +101,14 @@ public class K8SPODSAPIV1 {
                     .addNewContainer()
                     .withName(k8SPod.getRepoName())
                     .withImage(k8SPod.getRepoName())
-                    //.addNewPort().withContainerPort(80).endPort()
+                    .withCommand(commands)
                     .endContainer()
                     .endSpec()
                     .endTemplate()
                     .endSpec()
                     .build();
 
-            client.apps().deployments().inNamespace("default").createOrReplace(deployment);
+            Deployment result = client.apps().deployments().inNamespace("default").createOrReplace(deployment);
 
             k8SResponse.setData(k8SPod);
 
