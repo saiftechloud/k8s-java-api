@@ -8,6 +8,6 @@ import lombok.Setter;
 @Setter
 public class K8SResponse {
 
-    private PodList podList;
+    private Object data;
 
 }
