@@ -1,6 +1,8 @@
 package com.josephstar.k8s.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.josephstar.k8s.domain.K8S;
+import com.josephstar.k8s.domain.K8SPod;
 import com.josephstar.k8s.domain.K8SResponse;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodList;
@@ -12,9 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @Api(tags="k8s-pods-api-v1", description = "Kubernetes Pods API v1")
 @RestController
@@ -26,9 +26,12 @@ public class K8SPODSAPIV1 {
     @Value( "${k8s.master}")
     private String master;
 
-
     K8S k8S = new K8S();
 
+    /**
+     * This lists all pods.
+     * @return
+     */
     @GetMapping(path ="/list")
     public ResponseEntity<?> listPod() {
         K8SResponse k8SResponse = new K8SResponse();
@@ -37,7 +40,7 @@ public class K8SPODSAPIV1 {
         try (final KubernetesClient client = new DefaultKubernetesClient(config)) {
 
             PodList podList = client.pods().inAnyNamespace().list();
-            k8SResponse.setPodList(podList);
+            k8SResponse.setData(podList);
             logger.info("Listing pods for master = " + master + " and size = " + podList.getItems().size());
             podList.getItems().forEach((obj) -> { logger.info(obj.getMetadata().getName()); });
 
@@ -50,32 +53,46 @@ public class K8SPODSAPIV1 {
 
     }
 
-    @GetMapping(path ="/start")
-    public ResponseEntity<?> startPod() {
+    /**
+     *
+     * @param k8SRequest
+     *      scriptName - request script name
+     *      repoName - docker repository name
+     *      gitRepoUrl - git repository name
+     *      execId - request execution id
+     *      numberOfAgents - the number of replicas
+     * @return
+     */
+    @PostMapping(path ="/start")
+    public ResponseEntity<?> startPod(@RequestBody K8S k8SRequest) {
         K8SResponse k8SResponse = new K8SResponse();
 
         Config config = new ConfigBuilder().withMasterUrl(master).build();
         try (final KubernetesClient client = new DefaultKubernetesClient(config)) {
 
+            ObjectMapper mapper = new ObjectMapper();
+            K8SPod k8SPod = mapper.convertValue(k8SRequest.getRequest().getData(), K8SPod.class);
+            logger.info("Start Pods request with execId= " + k8SPod.getExecId() + " and numberOfAgents= " + k8SPod.getNumberOfAgents());
+
             Deployment deployment = new DeploymentBuilder()
                     .withNewMetadata()
-                    .withName("nginx-deployment")
-                    .addToLabels("app", "nginx")
+                    .withName(k8SPod.getScriptName())
+                    .addToLabels("app", k8SPod.getRepoName())
                     .endMetadata()
                     .withNewSpec()
-                    .withReplicas(1)
+                    .withReplicas(k8SPod.getNumberOfAgents())
                     .withNewSelector()
-                    .addToMatchLabels("app", "nginx")
+                    .addToMatchLabels("app", k8SPod.getRepoName())
                     .endSelector()
                     .withNewTemplate()
                     .withNewMetadata()
-                    .addToLabels("app", "nginx")
+                    .addToLabels("app", k8SPod.getRepoName())
                     .endMetadata()
                     .withNewSpec()
                     .addNewContainer()
-                    .withName("nginx")
-                    .withImage("nginx:1.7.9")
-                    .addNewPort().withContainerPort(80).endPort()
+                    .withName(k8SPod.getRepoName())
+                    .withImage(k8SPod.getRepoName())
+                    //.addNewPort().withContainerPort(80).endPort()
                     .endContainer()
                     .endSpec()
                     .endTemplate()
@@ -84,10 +101,13 @@ public class K8SPODSAPIV1 {
 
             client.apps().deployments().inNamespace("default").createOrReplace(deployment);
 
+            k8SResponse.setData(k8SPod);
+
         } catch (KubernetesClientException e) {
             k8S.setSuccess(false);
             logger.error(e.getMessage(), e);
         }
+
         k8S.setResponse(k8SResponse);
         return ResponseEntity.ok(k8S);
     }
