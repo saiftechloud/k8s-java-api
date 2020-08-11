@@ -8,6 +8,7 @@ import com.josephstar.k8s.domain.K8SResponse;
 import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
+import io.fabric8.kubernetes.api.model.apps.DeploymentList;
 import io.fabric8.kubernetes.client.*;
 import io.swagger.annotations.Api;
 import org.slf4j.Logger;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Api(tags="k8s-pods-api-v1", description = "Kubernetes Pods API v1")
 @RestController
@@ -82,27 +84,28 @@ public class K8SPODSAPIV1 {
             commands.add(k8SPod.getRepoName());
             commands.add( k8SPod.getGitRepoUrl());
             commands.add(k8SPod.getExecId());
+            commands.add(k8SPod.getUuid());
 
             // make deployment
             Deployment deployment = new DeploymentBuilder()
                     .withNewMetadata()
-                    .withName(k8SPod.getScriptName())
-                    .addToLabels("app", k8SPod.getRepoName())
+                    .withName(k8SPod.getUuid())
+                    .addToLabels("app", k8SPod.getUuid())
                     .endMetadata()
                     .withNewSpec()
                     .withReplicas(k8SPod.getNumberOfAgents())
                     .withNewSelector()
-                    .addToMatchLabels("app", k8SPod.getRepoName())
+                    .addToMatchLabels("app", k8SPod.getUuid())
                     .endSelector()
                     .withNewTemplate()
                     .withNewMetadata()
-                    .addToLabels("app", k8SPod.getRepoName())
+                    .addToLabels("app", k8SPod.getUuid())
                     .endMetadata()
                     .withNewSpec()
                     .addNewContainer()
                     .withName(k8SPod.getRepoName())
                     .withImage(k8SPod.getRepoName())
-                    .withCommand(commands)
+                    //.withCommand(commands)
                     .endContainer()
                     .endSpec()
                     .endTemplate()
@@ -127,22 +130,51 @@ public class K8SPODSAPIV1 {
         return ResponseEntity.ok(k8S);
     }
 
-    @GetMapping(path ="/stop")
-    public ResponseEntity<?> stopPod() {
+    @PostMapping(path ="/stop")
+    public ResponseEntity<?> stopPod(@RequestBody K8S k8SRequest) {
         K8SResponse k8SResponse = new K8SResponse();
+        boolean deploymentExist = false;
 
         Config config = new ConfigBuilder().withMasterUrl(master).build();
         try (final KubernetesClient client = new DefaultKubernetesClient(config)) {
 
-            // Deletion
-            Boolean isDeleted = client.apps().deployments()
-                    .inNamespace("default")
-                    .withName("nginx-deployment")
-                    .delete();
+            ObjectMapper mapper = new ObjectMapper();
+            K8SPod k8SPod = mapper.convertValue(k8SRequest.getRequest().getData(), K8SPod.class);
+            logger.info("STOP_PODS_API_K8S_REQUEST_PARAMS = " + k8SPod.toString());
 
-        } catch (KubernetesClientException e) {
+            // Check deployment existence by label
+            DeploymentList deploymentList = client.apps().deployments().inAnyNamespace().list();
+
+            for (Deployment deployment : deploymentList.getItems()){
+                logger.info("app-label = " + deployment.getMetadata().getLabels().containsValue(k8SPod.getUuid()));
+                logger.info("uuid = " + k8SPod.getUuid());
+                if (deployment.getMetadata().getLabels().containsValue(k8SPod.getUuid())){
+                    ObjectMapper mapperYAML = new ObjectMapper(new YAMLFactory());
+                    String deploymentYAML = mapperYAML.writeValueAsString(deployment);
+                    logger.info("STOP_PODS_API_K8S_DEPLOYMENT_TEMPLATE = \n" + deploymentYAML);
+                    deploymentExist = true;
+                    break;
+                }
+            }
+
+            // Delete Deployment if exists
+            if(deploymentExist){
+                client.apps().deployments()
+                        .inNamespace("default")
+                        .withLabel("app", k8SPod.getUuid())
+                        .delete();
+            }else {
+                logger.info("STOP_PODS_API_K8S_EXISTENCE not found for UUID = " + k8SPod.getUuid());
+                k8S.setSuccess(false);
+                k8S.setError("Error when stopping deployment: NOT EXIST");
+            }
+
+            k8SResponse.setData(k8SPod);
+
+        } catch (Exception ex) {
             k8S.setSuccess(false);
-            logger.error(e.getMessage(), e);
+            k8S.setMessage(ex.getMessage());
+            logger.error(ex.getMessage(), ex);
         }
         k8S.setResponse(k8SResponse);
         return ResponseEntity.ok(k8S);
