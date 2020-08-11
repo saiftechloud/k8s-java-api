@@ -82,21 +82,22 @@ public class K8SPODSAPIV1 {
             commands.add(k8SPod.getRepoName());
             commands.add( k8SPod.getGitRepoUrl());
             commands.add(k8SPod.getExecId());
+            commands.add(k8SPod.getUuid());
 
             // make deployment
             Deployment deployment = new DeploymentBuilder()
                     .withNewMetadata()
-                    .withName(k8SPod.getScriptName())
-                    .addToLabels("app", k8SPod.getRepoName())
+                    .withName(k8SPod.getUuid())
+                    .addToLabels("app", k8SPod.getUuid())
                     .endMetadata()
                     .withNewSpec()
                     .withReplicas(k8SPod.getNumberOfAgents())
                     .withNewSelector()
-                    .addToMatchLabels("app", k8SPod.getRepoName())
+                    .addToMatchLabels("app", k8SPod.getUuid())
                     .endSelector()
                     .withNewTemplate()
                     .withNewMetadata()
-                    .addToLabels("app", k8SPod.getRepoName())
+                    .addToLabels("app", k8SPod.getUuid())
                     .endMetadata()
                     .withNewSpec()
                     .addNewContainer()

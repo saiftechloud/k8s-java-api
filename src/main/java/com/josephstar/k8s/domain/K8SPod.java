@@ -15,6 +15,7 @@ public class K8SPod {
     private String repoName;
     private String gitRepoUrl;
     private String execId;
+    private String uuid;
     private Integer numberOfAgents;
 
 }
