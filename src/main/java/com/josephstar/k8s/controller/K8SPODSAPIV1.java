@@ -105,7 +105,7 @@ public class K8SPODSAPIV1 {
                     .addNewContainer()
                     .withName(k8SPod.getRepoName())
                     .withImage(k8SPod.getRepoName())
-                    //.withCommand(commands)
+                    .withCommand(commands)
                     .endContainer()
                     .endSpec()
                     .endTemplate()
