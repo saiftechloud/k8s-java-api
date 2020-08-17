@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Map;
 
 @Api(tags="k8s-pods-api-v1", description = "Kubernetes Pods API v1")
 @RestController
@@ -71,7 +71,7 @@ public class K8SPODSAPIV1 {
     @PostMapping(path ="/start")
     public ResponseEntity<?> startPod(@RequestBody K8S k8SRequest) {
         K8SResponse k8SResponse = new K8SResponse();
-        List<String> commands = new ArrayList<>();
+        List<String> args = new ArrayList<>();
 
         Config config = new ConfigBuilder().withMasterUrl(master).build();
         try (final KubernetesClient client = new DefaultKubernetesClient(config)) {
@@ -80,32 +80,32 @@ public class K8SPODSAPIV1 {
             K8SPod k8SPod = mapper.convertValue(k8SRequest.getRequest().getData(), K8SPod.class);
             logger.info("START_PODS_API_K8S_REQUEST_PARAMS = " + k8SPod.toString());
 
-            commands.add(k8SPod.getScriptName());
-            commands.add(k8SPod.getRepoName());
-            commands.add( k8SPod.getGitRepoUrl());
-            commands.add(k8SPod.getExecId());
-            commands.add(k8SPod.getUuid());
+            // Pass docker arguments
+            for(Map.Entry<String, String> entry : k8SPod.getArgs().entrySet()) {
+                args.add(entry.getValue());
+            }
+            args.add(k8SPod.getUuid());
 
             // make deployment
             Deployment deployment = new DeploymentBuilder()
                     .withNewMetadata()
                     .withName(k8SPod.getUuid())
-                    .addToLabels("app", k8SPod.getUuid())
+                    .addToLabels("execId", k8SPod.getUuid())
                     .endMetadata()
                     .withNewSpec()
                     .withReplicas(k8SPod.getNumberOfAgents())
                     .withNewSelector()
-                    .addToMatchLabels("app", k8SPod.getUuid())
+                    .addToMatchLabels("execId", k8SPod.getUuid())
                     .endSelector()
                     .withNewTemplate()
                     .withNewMetadata()
-                    .addToLabels("app", k8SPod.getUuid())
+                    .addToLabels("execId", k8SPod.getUuid())
                     .endMetadata()
                     .withNewSpec()
                     .addNewContainer()
-                    .withName(k8SPod.getRepoName())
-                    .withImage(k8SPod.getRepoName())
-                    .withCommand(commands)
+                    .withName("test")
+                    .withImage("lkd483/test:v1")
+                    .withArgs(args)
                     .endContainer()
                     .endSpec()
                     .endTemplate()
@@ -146,13 +146,13 @@ public class K8SPODSAPIV1 {
             DeploymentList deploymentList = client.apps().deployments().inAnyNamespace().list();
 
             for (Deployment deployment : deploymentList.getItems()){
-                logger.info("app-label = " + deployment.getMetadata().getLabels().containsValue(k8SPod.getUuid()));
                 logger.info("uuid = " + k8SPod.getUuid());
                 if (deployment.getMetadata().getLabels().containsValue(k8SPod.getUuid())){
                     ObjectMapper mapperYAML = new ObjectMapper(new YAMLFactory());
                     String deploymentYAML = mapperYAML.writeValueAsString(deployment);
                     logger.info("STOP_PODS_API_K8S_DEPLOYMENT_TEMPLATE = \n" + deploymentYAML);
                     deploymentExist = true;
+                    k8SPod.setNumberOfAgents(deployment.getSpec().getReplicas());
                     break;
                 }
             }
@@ -161,7 +161,7 @@ public class K8SPODSAPIV1 {
             if(deploymentExist){
                 client.apps().deployments()
                         .inNamespace("default")
-                        .withLabel("app", k8SPod.getUuid())
+                        .withLabel("execId", k8SPod.getUuid())
                         .delete();
             }else {
                 logger.info("STOP_PODS_API_K8S_EXISTENCE not found for UUID = " + k8SPod.getUuid());

@@ -5,16 +5,15 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.util.HashMap;
+
 @Getter
 @Setter
 @ToString
 @EqualsAndHashCode
 public class K8SPod {
 
-    private String scriptName;
-    private String repoName;
-    private String gitRepoUrl;
-    private String execId;
+    private HashMap<String, String> args = new HashMap<>();
     private String uuid;
     private Integer numberOfAgents;
 
