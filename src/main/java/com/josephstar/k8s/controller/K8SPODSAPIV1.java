@@ -10,6 +10,8 @@ import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
 import io.fabric8.kubernetes.api.model.apps.DeploymentList;
 import io.fabric8.kubernetes.client.*;
+import io.fabric8.openshift.client.DefaultOpenShiftClient;
+import io.fabric8.openshift.client.OpenShiftClient;
 import io.swagger.annotations.Api;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,30 +31,52 @@ public class K8SPODSAPIV1 {
     private static final Logger logger = LoggerFactory.getLogger(K8SPODSAPIV1.class);
 
     @Value( "${k8s.master}")
-    private String master;
+    private String masterK8S;
+
+    @Value( "${os.master}")
+    private String masterOS;
 
     K8S k8S = new K8S();
 
     /**
      * This lists all pods.
-     * @return
      */
-    @GetMapping(path ="/list")
-    public ResponseEntity<?> listPod() {
+    @PostMapping(path ="/list")
+    public ResponseEntity<?> listPod(@RequestBody K8S k8SRequest) {
         K8SResponse k8SResponse = new K8SResponse();
 
-        Config config = new ConfigBuilder().withMasterUrl(master).build();
-        try (final KubernetesClient client = new DefaultKubernetesClient(config)) {
+        try{
+            ObjectMapper mapper = new ObjectMapper();
+            K8SPod k8SPod = mapper.convertValue(k8SRequest.getRequest().getData(), K8SPod.class);
+            logger.info("START_PODS_API_K8S_REQUEST_PARAMS = " + k8SPod.toString());
 
-            PodList podList = client.pods().inAnyNamespace().list();
-            k8SResponse.setData(podList);
-            logger.info("Listing pods for master = " + master + " and size = " + podList.getItems().size());
-            podList.getItems().forEach((obj) -> { logger.info(obj.getMetadata().getName()); });
+            if(k8SPod.getAction().equals("K8S")){
+                logger.info("K8S");
+                Config config = new ConfigBuilder().withMasterUrl(masterK8S).build();
+                final KubernetesClient client = new DefaultKubernetesClient(config);
+                PodList podList = client.pods().inAnyNamespace().list();
+                k8SResponse.setData(podList);
+                logger.info("Listing pods for master = " + masterK8S + " and size = " + podList.getItems().size());
+                podList.getItems().forEach((obj) -> logger.info(obj.getMetadata().getName()));
+            }else if(k8SPod.getAction().equals("OS")){
+                logger.info("OS");
+                Config config = new ConfigBuilder().withMasterUrl(masterOS).build();
+                final OpenShiftClient client = new DefaultOpenShiftClient(config);
+                PodList podList = client.pods().inAnyNamespace().list();
+                k8SResponse.setData(podList);
+                logger.info("Listing pods for master = " + masterOS + " and size = " + podList.getItems().size());
+                podList.getItems().forEach((obj) -> logger.info(obj.getMetadata().getName()));
+            }else{
+                logger.info("UNKNOWN_ACTION_TYPE");
+                throw new Exception("Unknow Action Type");
+            }
 
-        } catch (KubernetesClientException e) {
+
+        }catch (Exception ex){
             k8S.setSuccess(false);
-            logger.error(e.getMessage(), e);
+            logger.error(ex.getMessage(), ex);
         }
+
         k8S.setResponse(k8SResponse);
         return ResponseEntity.ok(k8S);
 
@@ -73,7 +97,7 @@ public class K8SPODSAPIV1 {
         K8SResponse k8SResponse = new K8SResponse();
         List<String> args = new ArrayList<>();
 
-        Config config = new ConfigBuilder().withMasterUrl(master).build();
+        Config config = new ConfigBuilder().withMasterUrl(masterK8S).build();
         try (final KubernetesClient client = new DefaultKubernetesClient(config)) {
 
             ObjectMapper mapper = new ObjectMapper();
@@ -135,7 +159,7 @@ public class K8SPODSAPIV1 {
         K8SResponse k8SResponse = new K8SResponse();
         boolean deploymentExist = false;
 
-        Config config = new ConfigBuilder().withMasterUrl(master).build();
+        Config config = new ConfigBuilder().withMasterUrl(masterK8S).build();
         try (final KubernetesClient client = new DefaultKubernetesClient(config)) {
 
             ObjectMapper mapper = new ObjectMapper();
