@@ -16,5 +16,6 @@ public class K8SPod {
     private HashMap<String, String> args = new HashMap<>();
     private String uuid;
     private Integer numberOfAgents;
+    private String action;
 
 }

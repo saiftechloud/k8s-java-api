@@ -35,6 +35,7 @@ dependencies {
     compile "io.springfox:springfox-swagger2:${swagger2}"
     compile "io.springfox:springfox-swagger-ui:${swagger2}"
     compile "io.fabric8:kubernetes-client:${fabric8}"
+    compile "io.fabric8:openshift-client:${fabric8}"
 
 }
 
